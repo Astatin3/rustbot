@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{alloc::System, sync::Arc};
 
 pub mod bot_task;
 pub mod command_controler;
@@ -9,6 +9,8 @@ use azalea::{
 };
 use command_controler::BotTask;
 use parking_lot::Mutex;
+
+use crate::bot_task::*;
 
 pub static BOT_COUNT: usize = 3;
 pub static BOT_PREFIX: &'static str = "bot";
@@ -67,10 +69,27 @@ async fn handle(bot: Client, event: Event, state: BotState) -> anyhow::Result<()
     Ok(())
 }
 
-#[derive(Default, Clone, Component)]
+#[derive(Clone, Component)]
 pub struct BotState {
     pub task: Arc<Mutex<Option<Box<dyn BotTask>>>>,
     // pub messages_received: Arc<Mutex<usize>>,
+}
+
+impl Default for BotState {
+    fn default() -> Self {
+        Self {
+            task: Arc::new(Mutex::new(None)),
+        }
+    }
+}
+
+impl BotState {
+    fn get_task(&self) -> String {
+        match self.task.lock().as_ref() {
+            Some(task) => task.get_name().to_string(),
+            None => "No task".to_string(),
+        }
+    }
 }
 
 #[derive(Resource, Default, Clone)]
@@ -97,7 +116,33 @@ async fn handle_swarm(swarm: Swarm, event: SwarmEvent, state: SwarmState) -> any
             println!("Chat message: {}", command);
 
             println!("{}", command);
-            if let Some(command) = command_controler::parse_command(command.as_str()) {
+            if let Some(command) = {
+                let args = command
+                    .split_whitespace()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>();
+
+                match args[0].as_str() {
+                    "!chat" => Some(Box::new(Chat::init(args[1..].to_vec())) as Box<dyn BotTask>),
+                    "!goto" => {
+                        if let Some(task) = GotoBlock::parse(args[1..].to_vec()) {
+                            Some(Box::new(task) as Box<dyn BotTask>)
+                        } else {
+                            None
+                        }
+                    }
+                    "!status" => {
+                        for bot in swarm {
+                            let botstate = &bot.get_component::<BotState>().unwrap();
+                            println!("{} - {}", bot.username(), botstate.get_task());
+                        }
+                        println!("Unstarted: {:?}", state.tasks.lock());
+
+                        None
+                    }
+                    _ => None,
+                }
+            } {
                 state.tasks.lock().push(command);
             }
 

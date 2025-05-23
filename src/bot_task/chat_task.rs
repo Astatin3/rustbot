@@ -23,6 +23,9 @@ impl Chat {
 }
 
 impl BotTask for Chat {
+    fn get_name(&self) -> &str {
+        "Chat"
+    }
     fn on_event(&mut self, bot: &Client, _event: &Event) {
         if self.last_update.elapsed() >= DELAY {
             bot.chat(self.messages[self.index].as_str());

@@ -44,6 +44,9 @@ impl GotoBlock {
 }
 
 impl BotTask for GotoBlock {
+    fn get_name(&self) -> &str {
+        "Goto"
+    }
     fn on_event(&mut self, bot: &Client, event: &Event) {
         if !self.started {
             self.started = true;
